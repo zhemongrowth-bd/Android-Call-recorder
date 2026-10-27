@@ -55,6 +55,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -412,6 +413,7 @@ fun DeskScreen(
                                 if (coach.risks.isNotEmpty()) item { CoachCard("ঝুঁকি", coach.risks) }
                                 if (coach.nextSteps.isNotEmpty()) item { CoachCard("পরবর্তী ধাপ", coach.nextSteps) }
                             }
+                            item { PhoneRecordingsSection() }
                             item { SectionTitle("আজকের কল লগ", null) {} }
                             if (calls.isEmpty()) item { EmptyNote("আজ কোনো কল রেকর্ড নেই।") }
                             items(calls) { CallCard(it, leads) }
@@ -1279,6 +1281,32 @@ private fun ReportRowCard(row: ReportRow, onOpenLead: (String) -> Unit) {
             row.leadId?.let { leadId ->
                 Spacer(Modifier.height(6.dp))
                 OutlinedButton(onClick = { onOpenLead(leadId) }) { Text("লিড খুলুন", fontSize = 12.sp) }
+            }
+        }
+    }
+}
+
+/** Each recording queued on this phone with its own sync status, read from its upload job. */
+@Composable
+private fun PhoneRecordingsSection() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val flow = remember { androidx.work.WorkManager.getInstance(ctx).getWorkInfosByTagFlow(com.winstone.connect.data.sync.CallSyncQueue.TAG_RECORDING) }
+    val infos by flow.collectAsState(initial = emptyList())
+    if (infos.isEmpty()) return
+    WinCard {
+        Text("Phone recordings · ফোনের রেকর্ডিং", fontWeight = FontWeight.SemiBold)
+        infos.forEach { info ->
+            val phone = info.tags.firstOrNull { it.startsWith(com.winstone.connect.data.sync.CallSyncQueue.TAG_PHONE_PREFIX) }
+                ?.removePrefix(com.winstone.connect.data.sync.CallSyncQueue.TAG_PHONE_PREFIX).orEmpty().ifBlank { "Unknown number" }
+            val label = com.winstone.connect.data.sync.RecordingSyncLabel.ofWork(info.state, audioOnPhone = true)
+            val color = when (label) {
+                com.winstone.connect.data.sync.RecordingSyncLabel.FAILED -> WinRed
+                com.winstone.connect.data.sync.RecordingSyncLabel.SYNCED -> WinGreen
+                else -> WinInkMuted
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(phone, fontSize = 13.sp)
+                Text("${label.english} · ${label.bangla}", fontSize = 12.sp, color = color, fontWeight = FontWeight.Medium)
             }
         }
     }
