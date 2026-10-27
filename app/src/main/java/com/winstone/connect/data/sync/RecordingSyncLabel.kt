@@ -13,6 +13,15 @@ enum class RecordingSyncLabel(val english: String, val bangla: String) {
     FAILED("Failed", "ব্যর্থ — আবার চেষ্টা করুন");
 
     companion object {
+        /** Label for ONE recording from its own upload job. Synced only after the worker succeeded (server confirmed). */
+        fun ofWork(state: androidx.work.WorkInfo.State?, audioOnPhone: Boolean): RecordingSyncLabel = when (state) {
+            androidx.work.WorkInfo.State.RUNNING -> SYNCING
+            androidx.work.WorkInfo.State.ENQUEUED, androidx.work.WorkInfo.State.BLOCKED -> PENDING_SYNC
+            androidx.work.WorkInfo.State.SUCCEEDED -> SYNCED
+            androidx.work.WorkInfo.State.FAILED, androidx.work.WorkInfo.State.CANCELLED -> FAILED
+            null -> if (audioOnPhone) AVAILABLE else FAILED
+        }
+
         fun of(s: SyncStatus.Snapshot): RecordingSyncLabel = when {
             s.failed > 0 -> FAILED
             s.uploading > 0 -> SYNCING
