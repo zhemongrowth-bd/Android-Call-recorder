@@ -68,7 +68,7 @@ object CallSyncQueue {
         enqueue(
             context,
             unique = "rec_$uploadId",
-            tags = listOf(TAG_RECORDING, "$TAG_PHONE_PREFIX$phoneNumber"),
+            tags = recordingTags(phoneNumber, durationSeconds, uploadId),
             data = Data.Builder()
                 .putString(KEY_KIND, KIND_RECORDING)
                 .putString(KEY_LEAD, leadId)
@@ -229,6 +229,23 @@ object CallSyncQueue {
     }
 
     private const val FAILED_PREFS = "winstone_failed_recordings"
+    private const val ERROR_PREFS = "winstone_recording_errors"
+
+    private fun recordingTags(phone: String, durationSeconds: Int, uploadId: String) = listOf(
+        TAG_RECORDING, "$TAG_PHONE_PREFIX$phone", "$TAG_DURATION_PREFIX$durationSeconds",
+        "$TAG_QUEUED_AT_PREFIX${System.currentTimeMillis()}", "$TAG_UPLOAD_PREFIX$uploadId",
+    )
+
+    /** Last sync error per recording (short text only — no audio, no customer data beyond what the CRM shows). */
+    fun setRecordingError(context: Context, uploadId: String?, message: String?) {
+        if (uploadId == null) return
+        val e = context.getSharedPreferences(ERROR_PREFS, Context.MODE_PRIVATE).edit()
+        if (message.isNullOrBlank()) e.remove(uploadId) else e.putString(uploadId, message.take(200))
+        e.apply()
+    }
+
+    fun recordingError(context: Context, uploadId: String?): String? =
+        uploadId?.let { context.getSharedPreferences(ERROR_PREFS, Context.MODE_PRIVATE).getString(it, null) }
 
     /** Keeps a failed recording job so the agent can resend it later. No audio is stored here, only the job. */
     fun rememberFailedRecording(context: Context, data: Data) {
@@ -250,7 +267,7 @@ object CallSyncQueue {
             val data = runCatching { Data.fromByteArray(android.util.Base64.decode(encoded as String, android.util.Base64.NO_WRAP)) }.getOrNull()
             val path = data?.getString(KEY_FILE)
             if (data == null || path == null || !File(path).exists()) continue
-            enqueue(context, "rec_$id", data, ExistingWorkPolicy.REPLACE, listOf(TAG_RECORDING, "$TAG_PHONE_PREFIX${data.getString(KEY_PHONE).orEmpty()}"))
+            enqueue(context, "rec_$id", data, ExistingWorkPolicy.REPLACE, recordingTags(data.getString(KEY_PHONE).orEmpty(), data.getInt(KEY_DURATION, 0), id))
             prefs.edit().remove(id).apply()
             resent++
         }
@@ -271,6 +288,9 @@ object CallSyncQueue {
 
     const val TAG_RECORDING = "winstone_recording"
     const val TAG_PHONE_PREFIX = "rec_phone:"
+    const val TAG_DURATION_PREFIX = "rec_dur:"
+    const val TAG_QUEUED_AT_PREFIX = "rec_at:"
+    const val TAG_UPLOAD_PREFIX = "rec_id:"
     const val KEY_CALL_UID = "call_uid"
     const val KEY_STATE = "state"
     const val KEY_REC_SUPPORTED = "recording_supported"
@@ -305,7 +325,13 @@ class CrmSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
     override suspend fun doWork(): Result {
         val isRecording = inputData.getString(CallSyncQueue.KEY_KIND) == CallSyncQueue.KIND_RECORDING
         if (isRecording) SyncStatus.uploadStarted()
-        return try { doSyncWork() } finally { if (isRecording) SyncStatus.uploadEnded() }
+        return try {
+            doSyncWork().also {
+                if (isRecording && it is Result.Success) {
+                    CallSyncQueue.setRecordingError(applicationContext, inputData.getString(CallSyncQueue.KEY_UPLOAD_ID), null)
+                }
+            }
+        } finally { if (isRecording) SyncStatus.uploadEnded() }
     }
 
     private suspend fun doSyncWork(): Result {
@@ -320,6 +346,7 @@ class CrmSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                     val file = File(path)
                     if (!file.exists()) {
                         SyncStatus.failed(applicationContext, "Original audio file missing — recover the phone recording; no audio uploaded")
+                        CallSyncQueue.setRecordingError(applicationContext, inputData.getString(CallSyncQueue.KEY_UPLOAD_ID), "Original audio file missing")
                         return Result.failure()
                     }
                     WinstoneApi.uploadRecording(
@@ -433,6 +460,9 @@ class CrmSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                     kind == CallSyncQueue.KIND_CALL_STATE ||
                     runAttemptCount < 12
                 )
+            if (kind == CallSyncQueue.KIND_RECORDING) {
+                CallSyncQueue.setRecordingError(applicationContext, inputData.getString(CallSyncQueue.KEY_UPLOAD_ID), message.ifBlank { "Upload failed" })
+            }
             if (keepTrying) {
                 SyncStatus.retrying(applicationContext, message)
                 Result.retry()
