@@ -20,4 +20,16 @@ class RecordingSyncLabelTest {
 
     @Test fun anyFailureWins() =
         assertEquals(RecordingSyncLabel.FAILED, RecordingSyncLabel.of(Snapshot(failed = 1, uploading = 1, lastAudioUploadedAtMillis = 1L)))
+
+    @org.junit.Test
+    fun perRecordingStatusFollowsItsOwnUploadJob() {
+        val S = androidx.work.WorkInfo.State.values().associateBy { it.name }
+        org.junit.Assert.assertEquals(RecordingSyncLabel.SYNCING, RecordingSyncLabel.ofWork(S["RUNNING"], true))
+        org.junit.Assert.assertEquals(RecordingSyncLabel.PENDING_SYNC, RecordingSyncLabel.ofWork(S["ENQUEUED"], true))
+        org.junit.Assert.assertEquals(RecordingSyncLabel.PENDING_SYNC, RecordingSyncLabel.ofWork(S["BLOCKED"], true))
+        org.junit.Assert.assertEquals(RecordingSyncLabel.SYNCED, RecordingSyncLabel.ofWork(S["SUCCEEDED"], true))
+        org.junit.Assert.assertEquals(RecordingSyncLabel.FAILED, RecordingSyncLabel.ofWork(S["FAILED"], true))
+        org.junit.Assert.assertEquals(RecordingSyncLabel.AVAILABLE, RecordingSyncLabel.ofWork(null, true))
+        org.junit.Assert.assertEquals(RecordingSyncLabel.FAILED, RecordingSyncLabel.ofWork(null, false))
+    }
 }
