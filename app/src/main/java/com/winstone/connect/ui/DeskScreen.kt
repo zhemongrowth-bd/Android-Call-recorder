@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1286,27 +1287,52 @@ private fun ReportRowCard(row: ReportRow, onOpenLead: (String) -> Unit) {
     }
 }
 
-/** Each recording queued on this phone with its own sync status, read from its upload job. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+/** Each recording queued on this phone: status, date, duration and last sync error, with status filters. */
 @Composable
 private fun PhoneRecordingsSection() {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val flow = remember { androidx.work.WorkManager.getInstance(ctx).getWorkInfosByTagFlow(com.winstone.connect.data.sync.CallSyncQueue.TAG_RECORDING) }
     val infos by flow.collectAsState(initial = emptyList())
+    var filter by remember { mutableStateOf<com.winstone.connect.data.sync.RecordingSyncLabel?>(null) }
     if (infos.isEmpty()) return
+    val rows = infos.map {
+        Triple(it, com.winstone.connect.data.sync.RecordingRowInfo.fromTags(it.tags), com.winstone.connect.data.sync.RecordingSyncLabel.ofWork(it.state, audioOnPhone = true))
+    }.sortedByDescending { it.second.queuedAtMillis ?: 0L }
+    val fmt = remember { java.text.SimpleDateFormat("d MMM, h:mm a", java.util.Locale.ENGLISH).apply { timeZone = java.util.TimeZone.getTimeZone("Asia/Dhaka") } }
     WinCard {
         Text("Phone recordings · ফোনের রেকর্ডিং", fontWeight = FontWeight.SemiBold)
-        infos.forEach { info ->
-            val phone = info.tags.firstOrNull { it.startsWith(com.winstone.connect.data.sync.CallSyncQueue.TAG_PHONE_PREFIX) }
-                ?.removePrefix(com.winstone.connect.data.sync.CallSyncQueue.TAG_PHONE_PREFIX).orEmpty().ifBlank { "Unknown number" }
-            val label = com.winstone.connect.data.sync.RecordingSyncLabel.ofWork(info.state, audioOnPhone = true)
+        Row(Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState()).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            com.winstone.connect.data.sync.RecordingFilter.choices.forEach { c ->
+                val count = rows.count { com.winstone.connect.data.sync.RecordingFilter.matches(c, it.third) }
+                androidx.compose.material3.FilterChip(
+                    selected = filter == c,
+                    onClick = { filter = c },
+                    label = { Text("${c?.english ?: "All"} ($count)", fontSize = 12.sp) },
+                )
+            }
+        }
+        val shown = rows.filter { com.winstone.connect.data.sync.RecordingFilter.matches(filter, it.third) }
+        if (shown.isEmpty()) Text("No recordings with this status · এই অবস্থায় কোনো রেকর্ডিং নেই", fontSize = 12.sp, color = WinInkMuted)
+        shown.forEach { (_, row, label) ->
             val color = when (label) {
                 com.winstone.connect.data.sync.RecordingSyncLabel.FAILED -> WinRed
                 com.winstone.connect.data.sync.RecordingSyncLabel.SYNCED -> WinGreen
                 else -> WinInkMuted
             }
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(phone, fontSize = 13.sp)
-                Text("${label.english} · ${label.bangla}", fontSize = 12.sp, color = color, fontWeight = FontWeight.Medium)
+            Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(row.phone, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("${label.english} · ${label.bangla}", fontSize = 12.sp, color = color, fontWeight = FontWeight.Medium)
+                }
+                val date = row.queuedAtMillis?.let { fmt.format(java.util.Date(it)) } ?: "Date unknown"
+                val dur = row.durationSeconds?.let { "${it / 60}:${"%02d".format(it % 60)}" } ?: "Duration unknown"
+                Text("$date · $dur", fontSize = 11.sp, color = WinInkMuted)
+                if (label != com.winstone.connect.data.sync.RecordingSyncLabel.SYNCED) {
+                    com.winstone.connect.data.sync.CallSyncQueue.recordingError(ctx, row.uploadId)?.let {
+                        Text("Last error: $it", fontSize = 11.sp, color = if (label == com.winstone.connect.data.sync.RecordingSyncLabel.FAILED) WinRed else WinInkMuted)
+                    }
+                }
             }
         }
     }
