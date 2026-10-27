@@ -32,4 +32,19 @@ class RecordingSyncLabelTest {
         org.junit.Assert.assertEquals(RecordingSyncLabel.AVAILABLE, RecordingSyncLabel.ofWork(null, true))
         org.junit.Assert.assertEquals(RecordingSyncLabel.FAILED, RecordingSyncLabel.ofWork(null, false))
     }
+
+    @Test fun rowInfoReadsTagsAndRejectsBadValues() {
+        val ok = com.winstone.connect.data.sync.RecordingRowInfo.fromTags(setOf("winstone_recording", "rec_phone:01711", "rec_dur:95", "rec_at:1700000000000", "rec_id:u1"))
+        assertEquals("01711", ok.phone); assertEquals(95, ok.durationSeconds); assertEquals(1700000000000L, ok.queuedAtMillis); assertEquals("u1", ok.uploadId)
+        val bad = com.winstone.connect.data.sync.RecordingRowInfo.fromTags(setOf("rec_dur:-3", "rec_at:abc"))
+        assertEquals("Unknown number", bad.phone); assertEquals(null, bad.durationSeconds); assertEquals(null, bad.queuedAtMillis)
+    }
+
+    @Test fun filterShowsOnlyChosenStatus() {
+        val f = com.winstone.connect.data.sync.RecordingFilter
+        assertEquals(true, f.matches(null, RecordingSyncLabel.FAILED))
+        assertEquals(true, f.matches(RecordingSyncLabel.FAILED, RecordingSyncLabel.FAILED))
+        assertEquals(false, f.matches(RecordingSyncLabel.SYNCED, RecordingSyncLabel.PENDING_SYNC))
+        assertEquals(5, f.choices.size)
+    }
 }
