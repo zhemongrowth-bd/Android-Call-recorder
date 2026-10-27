@@ -31,3 +31,24 @@ enum class RecordingSyncLabel(val english: String, val bangla: String) {
         }
     }
 }
+
+/** Details of one queued recording, read from its upload job's tags (pure, unit-tested). */
+data class RecordingRowInfo(val phone: String, val durationSeconds: Int?, val queuedAtMillis: Long?, val uploadId: String?) {
+    companion object {
+        fun fromTags(tags: Set<String>): RecordingRowInfo {
+            fun v(prefix: String) = tags.firstOrNull { it.startsWith(prefix) }?.removePrefix(prefix)
+            return RecordingRowInfo(
+                phone = v(CallSyncQueue.TAG_PHONE_PREFIX).orEmpty().ifBlank { "Unknown number" },
+                durationSeconds = v(CallSyncQueue.TAG_DURATION_PREFIX)?.toIntOrNull()?.takeIf { it >= 0 },
+                queuedAtMillis = v(CallSyncQueue.TAG_QUEUED_AT_PREFIX)?.toLongOrNull()?.takeIf { it > 0 },
+                uploadId = v(CallSyncQueue.TAG_UPLOAD_PREFIX),
+            )
+        }
+    }
+}
+
+/** Filter chips for the Phone recordings list; null = All. */
+object RecordingFilter {
+    val choices: List<RecordingSyncLabel?> = listOf(null, RecordingSyncLabel.PENDING_SYNC, RecordingSyncLabel.SYNCING, RecordingSyncLabel.SYNCED, RecordingSyncLabel.FAILED)
+    fun matches(filter: RecordingSyncLabel?, label: RecordingSyncLabel) = filter == null || filter == label
+}
