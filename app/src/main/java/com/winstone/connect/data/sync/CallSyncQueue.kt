@@ -13,6 +13,8 @@ import androidx.work.WorkerParameters
 import com.winstone.connect.data.AgentSession
 import com.winstone.connect.data.remote.WinstoneApi
 import java.io.File
+import java.io.IOException
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
@@ -26,6 +28,7 @@ import java.util.concurrent.TimeUnit
  */
 object CallSyncQueue {
 
+    @Synchronized
     fun queueRecording(
         context: Context,
         leadId: String?,
@@ -42,7 +45,26 @@ object CallSyncQueue {
         // Cache storage can be evicted while offline. Keep queued originals in app files.
         val dir = File(context.filesDir, "pending_call_audio").apply { mkdirs() }
         val durable = File(dir, "$uploadId.${file.extension.ifBlank { "m4a" }}")
-        if (!durable.exists()) file.copyTo(durable, overwrite = false)
+        // Never treat an interrupted/zero-byte copy as a valid queued recording.
+        if (!file.isFile || file.length() == 0L) throw IOException("Recording source is missing or empty")
+        if (!durable.isFile || durable.length() == 0L || durable.length() != file.length()) {
+            durable.delete()
+            val temporary = File(dir, "$uploadId.${UUID.randomUUID()}.tmp")
+            try {
+                file.copyTo(temporary, overwrite = false)
+                if (temporary.length() != file.length() || temporary.length() == 0L) {
+                    throw IOException("Recording copy was incomplete")
+                }
+                if (!temporary.renameTo(durable)) {
+                    // A previous concurrent attempt may have committed the same file.
+                    if (!durable.isFile || durable.length() != file.length()) {
+                        throw IOException("Could not commit durable recording copy")
+                    }
+                }
+            } finally {
+                temporary.delete()
+            }
+        }
         enqueue(
             context,
             unique = "rec_$uploadId",
