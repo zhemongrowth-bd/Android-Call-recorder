@@ -205,14 +205,44 @@ object CallSyncQueue {
         )
     }
 
-    private fun enqueue(context: Context, unique: String, data: Data) {
+    private const val FAILED_PREFS = "winstone_failed_recordings"
+
+    /** Keeps a failed recording job so the agent can resend it later. No audio is stored here, only the job. */
+    fun rememberFailedRecording(context: Context, data: Data) {
+        val id = data.getString(KEY_UPLOAD_ID) ?: return
+        context.getSharedPreferences(FAILED_PREFS, Context.MODE_PRIVATE).edit()
+            .putString(id, android.util.Base64.encodeToString(data.toByteArray(), android.util.Base64.NO_WRAP))
+            .apply()
+    }
+
+    /**
+     * Re-queues every failed recording whose original audio is still on the phone.
+     * Same upload id, so the CRM's idempotent ingest never creates a duplicate.
+     * Returns how many were resent; jobs with a missing file stay failed.
+     */
+    fun retryFailedRecordings(context: Context): Int {
+        val prefs = context.getSharedPreferences(FAILED_PREFS, Context.MODE_PRIVATE)
+        var resent = 0
+        for ((id, encoded) in prefs.all) {
+            val data = runCatching { Data.fromByteArray(android.util.Base64.decode(encoded as String, android.util.Base64.NO_WRAP)) }.getOrNull()
+            val path = data?.getString(KEY_FILE)
+            if (data == null || path == null || !File(path).exists()) continue
+            enqueue(context, "rec_$id", data, ExistingWorkPolicy.REPLACE)
+            prefs.edit().remove(id).apply()
+            resent++
+        }
+        if (resent > 0) SyncStatus.retried(context, resent)
+        return resent
+    }
+
+    private fun enqueue(context: Context, unique: String, data: Data, policy: ExistingWorkPolicy = ExistingWorkPolicy.KEEP) {
         val request = OneTimeWorkRequestBuilder<CrmSyncWorker>()
             .setInputData(data)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
         SyncStatus.queued(context)
-        WorkManager.getInstance(context).enqueueUniqueWork(unique, ExistingWorkPolicy.KEEP, request)
+        WorkManager.getInstance(context).enqueueUniqueWork(unique, policy, request)
     }
 
     const val KEY_CALL_UID = "call_uid"
@@ -381,6 +411,7 @@ class CrmSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorke
                 SyncStatus.retrying(applicationContext, message)
                 Result.retry()
             } else {
+                if (kind == CallSyncQueue.KIND_RECORDING) CallSyncQueue.rememberFailedRecording(applicationContext, inputData)
                 SyncStatus.failed(applicationContext, message)
                 Result.failure()
             }
