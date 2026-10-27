@@ -28,9 +28,27 @@ android {
         buildConfig = true
     }
 
+    // Release signing comes only from CI secrets (never committed). Without them the
+    // release build is left unsigned and CI refuses to publish it.
+    val ksPath = System.getenv("WINSTONE_KEYSTORE_PATH")
+    signingConfigs {
+        if (ksPath != null) create("release") {
+            storeFile = file(ksPath)
+            storePassword = System.getenv("WINSTONE_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("WINSTONE_KEY_ALIAS")
+            keyPassword = System.getenv("WINSTONE_KEYSTORE_PASSWORD")
+        }
+    }
+
     buildTypes {
+        // Test build installs side by side with the agent release (own package id + name).
+        debug {
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+        }
         release {
             isMinifyEnabled = false
+            if (ksPath != null) signingConfig = signingConfigs.getByName("release")
         }
     }
 
