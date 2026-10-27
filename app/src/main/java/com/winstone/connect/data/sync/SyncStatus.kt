@@ -87,6 +87,12 @@ object SyncStatus {
     @Synchronized
     fun uploadEnded() { _state.value = _state.value.copy(uploading = (_state.value.uploading - 1).coerceAtLeast(0)) }
 
+    /** Failed items the agent resent: no longer failed (enqueue already counted them as pending). */
+    @Synchronized
+    fun retried(context: Context, count: Int) = update(context) {
+        it.copy(failed = (it.failed - count).coerceAtLeast(0), lastError = null)
+    }
+
     @Synchronized
     fun clearErrors(context: Context) = update(context) { it.copy(failed = 0, lastError = null) }
 
