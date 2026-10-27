@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Winstone black-and-gold launcher icon (vector, API 24+). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#111111" android:pathData="M54,4a50,50 0,1 1,0 100a50,50 0,1 1,0 -100z" />
+    <path android:strokeColor="#C9A227" android:strokeWidth="3" android:fillColor="#00000000"
+        android:pathData="M54,12a42,42 0,1 1,0 84a42,42 0,1 1,0 -84z" />
+    <path android:strokeColor="#C9A227" android:strokeWidth="6" android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:fillColor="#00000000" android:pathData="M30,38L41,72L54,46L67,72L78,38" />
+</vector>

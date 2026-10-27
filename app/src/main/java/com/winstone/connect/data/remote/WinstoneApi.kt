@@ -347,7 +347,7 @@ object WinstoneApi {
         // later moved to a newer app version.
         com.winstone.connect.data.AppVersion.name?.let { put("app_version", it) }
         com.winstone.connect.data.AppVersion.code.takeIf { it > 0 }?.let { put("version_code", it) }
-        put("captured_at", java.time.Instant.now().toString())
+        put("captured_at", com.winstone.connect.data.IsoTime.now())
         put("category", category)
         summary?.let { if (it.isNotBlank()) put("summary", it) }
         note?.let { if (it.isNotBlank()) put("note", it) }

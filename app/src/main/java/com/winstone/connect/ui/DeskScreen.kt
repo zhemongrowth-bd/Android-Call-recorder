@@ -311,26 +311,28 @@ fun DeskScreen(
 
             if (state.loading && data == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            } else if (tab == TAB_HOME) {
+                // AgentDashboardScreen has its own scrolling list; nesting it inside
+                // another LazyColumn crashes with infinite height constraints.
+                Box(Modifier.fillMaxSize()) {
+                    AgentDashboardScreen(
+                        activity = activity,
+                        agentName = data?.agentName ?: "…",
+                        employeeId = state.employeeId.orEmpty(),
+                        leads = displayedLeads,
+                        onStartCall = { startCall(it) },
+                        onLeadDetail = { leadDetail = it },
+                        onViewAllLeads = { tab = TAB_LEADS },
+                        onViewAllFollowUps = { tab = TAB_CALLS },
+                    )
+                }
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     when (tab) {
-                        TAB_HOME -> {
-                            item {
-                                AgentDashboardScreen(
-                                    activity = activity,
-                                    agentName = data?.agentName ?: "…",
-                                    employeeId = state.employeeId.orEmpty(),
-                                    leads = displayedLeads,
-                                    onStartCall = { startCall(it) },
-                                    onLeadDetail = { leadDetail = it },
-                                    onViewAllLeads = { tab = TAB_LEADS },
-                                    onViewAllFollowUps = { tab = TAB_CALLS },
-                                )
-                            }
-                        }
+                        TAB_HOME -> Unit // rendered outside this list (it owns its own LazyColumn)
                         TAB_LEADS -> {
                             if (leads.isEmpty()) item { EmptyNote("এখনও কোনো লিড অ্যাসাইন হয়নি।") }
                             if (leads.isNotEmpty()) {

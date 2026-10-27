@@ -37,6 +37,7 @@ object CallLogSweeper {
     /** Never look further back than this on a fresh install / first grant. */
     private const val FIRST_RUN_WINDOW_MS = 3L * 24 * 60 * 60 * 1000
 
+    @Synchronized
     fun sweep(context: Context): Int {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG)
             != PackageManager.PERMISSION_GRANTED
@@ -62,7 +63,7 @@ object CallLogSweeper {
                 ),
                 "${CallLog.Calls.DATE} > ? OR (${CallLog.Calls.DATE} = ? AND ${CallLog.Calls._ID} > ?)",
                 arrayOf(cursor.toString(), cursor.toString(), cursorId.toString()),
-                "${CallLog.Calls.DATE} ASC, ${CallLog.Calls._ID} ASC LIMIT $MAX_PER_SWEEP",
+                "${CallLog.Calls.DATE} ASC, ${CallLog.Calls._ID} ASC", // LIMIT in sortOrder is rejected on Android 10+; capped in the loop
             )
         }.getOrNull() ?: return 0
 
@@ -72,7 +73,9 @@ object CallLogSweeper {
             val typeCol = c.getColumnIndexOrThrow(CallLog.Calls.TYPE)
             val dateCol = c.getColumnIndexOrThrow(CallLog.Calls.DATE)
             val durCol = c.getColumnIndexOrThrow(CallLog.Calls.DURATION)
-            while (c.moveToNext()) {
+            var scanned = 0
+            while (scanned < MAX_PER_SWEEP && c.moveToNext()) {
+                scanned++
                 val at = c.getLong(dateCol)
                 val rowId = c.getLong(idCol)
                 // A call still in progress is left to the live receiver, and the

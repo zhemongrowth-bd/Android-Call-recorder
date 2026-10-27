@@ -40,6 +40,7 @@ jobs:
           WINSTONE_KEYSTORE_B64: ${{ secrets.WINSTONE_KEYSTORE_B64 }}
           WINSTONE_KEYSTORE_PASSWORD: ${{ secrets.WINSTONE_KEYSTORE_PASSWORD }}
           WINSTONE_KEY_ALIAS: ${{ secrets.WINSTONE_KEY_ALIAS }}
+          WINSTONE_KEY_PASSWORD: ${{ secrets.WINSTONE_KEY_PASSWORD }}
         run: |
           test -n "$WINSTONE_KEYSTORE_B64" || { echo "Release signing secrets missing"; exit 1; }
           echo "$WINSTONE_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"

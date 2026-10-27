@@ -112,7 +112,7 @@ object WinstoneAgentApi {
         if (!agentId.isNullOrBlank()) put("agent_id", agentId)
         put("client_ref", clientRef)
         put("captured_offline", capturedOffline)
-        put("captured_at", java.time.Instant.now().toString())
+        put("captured_at", com.winstone.connect.data.IsoTime.now())
         com.winstone.connect.data.AppVersion.name?.let { put("app_version", it) }
         com.winstone.connect.data.AppVersion.code.takeIf { it > 0 }?.let { put("version_code", it) }
     }

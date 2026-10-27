@@ -39,9 +39,11 @@ class CallStateReceiver : BroadcastReceiver() {
                 if (lastState == TelephonyManager.EXTRA_STATE_OFFHOOK) return
                 lastState = state
                 offHookAt = System.currentTimeMillis()
-                CallRecordingService.start(app)
                 val rec = recorder(app)
                 val started = rec.start(LiveCallLauncher.activeLeadId)
+                // Foreground service only once recording really started, so it is never
+                // stopped before startForeground() runs (RemoteServiceException).
+                if (started) CallRecordingService.start(app)
                 LiveCallLauncher.recording = started
                 if (!started) {
                     val capability = RecordingCapabilityCheck.cachedOrNull()
@@ -100,7 +102,7 @@ class CallStateReceiver : BroadcastReceiver() {
                         incoming = !outgoing,
                         recorderSource = recorderSource,
                         callUid = physicalCallUid,
-                        callStartedAt = if (offHookAt > 0) java.time.Instant.ofEpochMilli(offHookAt).toString() else null,
+                        callStartedAt = if (offHookAt > 0) com.winstone.connect.data.IsoTime.fromMillis(offHookAt) else null,
                     ) }.onFailure { com.winstone.connect.data.sync.SyncStatus.failed(app, "Recording not saved: ${it.message}") }
                 } else if (captured != null) {
                     captured.first.delete()

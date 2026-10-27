@@ -27,8 +27,18 @@ class CallRecordingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         ensureChannel(this)
-        startForeground(NOTIFICATION_ID, notification(this))
-        return START_STICKY
+        val micGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+            this, android.Manifest.permission.RECORD_AUDIO,
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val ok = runCatching {
+            if (Build.VERSION.SDK_INT >= 30 && micGranted) {
+                startForeground(NOTIFICATION_ID, notification(this), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+            } else {
+                startForeground(NOTIFICATION_ID, notification(this))
+            }
+        }.isSuccess
+        if (!ok || !micGranted) { stopSelf(); return START_NOT_STICKY }
+        return START_NOT_STICKY
     }
 
     private fun notification(context: Context): Notification =

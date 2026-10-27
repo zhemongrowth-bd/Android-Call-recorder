@@ -90,7 +90,7 @@ class PhoneRecordingPickupWorker(context: Context, params: WorkerParameters) :
                 incoming = inputData.getBoolean(KEY_INCOMING, false),
                 recorderSource = SOURCE,
                 callUid = uid,
-                callStartedAt = java.time.Instant.ofEpochMilli(start).toString(),
+                callStartedAt = com.winstone.connect.data.IsoTime.fromMillis(start),
             )
         } catch (e: Exception) {
             SyncStatus.retrying(ctx, "Could not persist phone recording; retrying without deleting the pickup copy")

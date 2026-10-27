@@ -21,6 +21,8 @@ android {
         targetSdk = 35
         versionCode = 28
         versionName = "2.17"
+        val crmUrl = (localProps.getProperty("CRM_BASE_URL") ?: "https://crm.winstonebd.com").trimEnd('/')
+        buildConfigField("String", "CRM_BASE_URL", "\"$crmUrl\"")
     }
 
     buildFeatures {
@@ -30,13 +32,17 @@ android {
 
     // Release signing comes only from CI secrets (never committed). Without them the
     // release build is left unsigned and CI refuses to publish it.
-    val ksPath = System.getenv("WINSTONE_KEYSTORE_PATH")
+    // Local builds may use local.properties RELEASE_* (never committed).
+    fun cfg(env: String, prop: String): String? =
+        System.getenv(env)?.takeIf { it.isNotBlank() } ?: localProps.getProperty(prop)?.takeIf { it.isNotBlank() }
+    val ksPath = cfg("WINSTONE_KEYSTORE_PATH", "RELEASE_STORE_FILE")
+    val storePass = cfg("WINSTONE_KEYSTORE_PASSWORD", "RELEASE_STORE_PASSWORD")
     signingConfigs {
         if (ksPath != null) create("release") {
             storeFile = file(ksPath)
-            storePassword = System.getenv("WINSTONE_KEYSTORE_PASSWORD")
-            keyAlias = System.getenv("WINSTONE_KEY_ALIAS")
-            keyPassword = System.getenv("WINSTONE_KEYSTORE_PASSWORD")
+            storePassword = storePass
+            keyAlias = cfg("WINSTONE_KEY_ALIAS", "RELEASE_KEY_ALIAS")
+            keyPassword = cfg("WINSTONE_KEY_PASSWORD", "RELEASE_KEY_PASSWORD") ?: storePass
         }
     }
 
@@ -47,7 +53,9 @@ android {
             versionNameSuffix = "-test"
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (ksPath != null) signingConfig = signingConfigs.getByName("release")
         }
     }
@@ -55,6 +63,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -79,6 +88,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }

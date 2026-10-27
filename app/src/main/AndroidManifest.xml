@@ -24,6 +24,10 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+
     <!-- Android 11+ package visibility: needed so the lead card's WhatsApp
          button can hand the message to WhatsApp (or a browser fallback). -->
     <queries>
@@ -33,14 +37,25 @@
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
         </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
     </queries>
 
     <application
         android:name=".WinstoneApp"
         android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher"
         android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:usesCleartextTraffic="false"
         android:supportsRtl="true"
-        android:theme="@style/Theme.WinstoneConnect">
+        android:theme="@style/Theme.WinstoneConnect"
+        tools:targetApi="35">
 
         <activity
             android:name=".MainActivity"
@@ -56,9 +71,10 @@
             </intent-filter>
         </activity>
 
-        <!-- Legitimate microphone foreground service: keeps call recording alive
-             with a persistent notification the agent can always see. -->
-        <activity android:name=".SimDialerActivity" android:exported="true">
+        <activity
+            android:name=".SimDialerActivity"
+            android:exported="true"
+            android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.DIAL" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -68,12 +84,27 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="tel" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tel" />
+            </intent-filter>
         </activity>
-        <service android:name=".telephony.WinstoneInCallService"
-            android:permission="android.permission.BIND_INCALL_SERVICE" android:exported="true">
+
+        <service
+            android:name=".telephony.WinstoneInCallService"
+            android:permission="android.permission.BIND_INCALL_SERVICE"
+            android:exported="true">
             <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="true" />
-            <intent-filter><action android:name="android.telecom.InCallService" /></intent-filter>
+            <meta-data android:name="android.telecom.IN_CALL_SERVICE_RINGING" android:value="true" />
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
         </service>
+
+        <!-- Legitimate microphone foreground service: keeps call recording alive
+             with a persistent notification the agent can always see. -->
         <service
             android:name=".telephony.CallRecordingService"
             android:exported="false"
@@ -86,6 +117,7 @@
                 <action android:name="android.intent.action.PHONE_STATE" />
             </intent-filter>
         </receiver>
+
         <!-- Calls dialled from the phone's own dialer still reach the CRM. -->
         <receiver
             android:name=".telephony.OutgoingCallReceiver"
