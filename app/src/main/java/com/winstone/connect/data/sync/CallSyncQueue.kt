@@ -46,6 +46,7 @@ object CallSyncQueue {
         enqueue(
             context,
             unique = "rec_$uploadId",
+            tags = listOf(TAG_RECORDING, "$TAG_PHONE_PREFIX$phoneNumber"),
             data = Data.Builder()
                 .putString(KEY_KIND, KIND_RECORDING)
                 .putString(KEY_LEAD, leadId)
@@ -227,7 +228,7 @@ object CallSyncQueue {
             val data = runCatching { Data.fromByteArray(android.util.Base64.decode(encoded as String, android.util.Base64.NO_WRAP)) }.getOrNull()
             val path = data?.getString(KEY_FILE)
             if (data == null || path == null || !File(path).exists()) continue
-            enqueue(context, "rec_$id", data, ExistingWorkPolicy.REPLACE)
+            enqueue(context, "rec_$id", data, ExistingWorkPolicy.REPLACE, listOf(TAG_RECORDING, "$TAG_PHONE_PREFIX${data.getString(KEY_PHONE).orEmpty()}"))
             prefs.edit().remove(id).apply()
             resent++
         }
@@ -235,8 +236,9 @@ object CallSyncQueue {
         return resent
     }
 
-    private fun enqueue(context: Context, unique: String, data: Data, policy: ExistingWorkPolicy = ExistingWorkPolicy.KEEP) {
+    private fun enqueue(context: Context, unique: String, data: Data, policy: ExistingWorkPolicy = ExistingWorkPolicy.KEEP, tags: List<String> = emptyList()) {
         val request = OneTimeWorkRequestBuilder<CrmSyncWorker>()
+            .apply { tags.forEach { addTag(it) } }
             .setInputData(data)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
@@ -245,6 +247,8 @@ object CallSyncQueue {
         WorkManager.getInstance(context).enqueueUniqueWork(unique, policy, request)
     }
 
+    const val TAG_RECORDING = "winstone_recording"
+    const val TAG_PHONE_PREFIX = "rec_phone:"
     const val KEY_CALL_UID = "call_uid"
     const val KEY_STATE = "state"
     const val KEY_REC_SUPPORTED = "recording_supported"
