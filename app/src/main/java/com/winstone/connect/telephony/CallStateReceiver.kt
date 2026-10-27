@@ -87,7 +87,8 @@ class CallStateReceiver : BroadcastReceiver() {
                 // and the call is reported as recording-unavailable instead.
                 val uploadable = CallLifecycle.uploadable(support, captured != null)
                 if (wasOnCall && captured != null && uploadable) {
-                    CallSyncQueue.queueRecording(
+                    // An empty/interrupted recording is refused by the queue; show it as a sync failure, never crash.
+                    runCatching { CallSyncQueue.queueRecording(
                         context = app,
                         leadId = if (outgoing) LiveCallLauncher.activeLeadId else null,
                         phoneNumber =
@@ -100,7 +101,7 @@ class CallStateReceiver : BroadcastReceiver() {
                         recorderSource = recorderSource,
                         callUid = physicalCallUid,
                         callStartedAt = if (offHookAt > 0) java.time.Instant.ofEpochMilli(offHookAt).toString() else null,
-                    )
+                    ) }.onFailure { com.winstone.connect.data.sync.SyncStatus.failed(app, "Recording not saved: ${it.message}") }
                 } else if (captured != null) {
                     captured.first.delete()
                 }
