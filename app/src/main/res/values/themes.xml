@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.WinstoneConnect" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorBackground">@color/win_cream</item>
+        <item name="android:statusBarColor">@color/win_cream</item>
+        <item name="android:navigationBarColor">@color/win_cream</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

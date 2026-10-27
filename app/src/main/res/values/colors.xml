@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Winstone Connect — কালো-সোনালি প্যালেট, ওয়েব CRM-এর টোকেনের সাথে মিলিয়ে।
+-->
+<resources>
+    <!-- Foundation -->
+    <color name="win_cream">#0B0B0C</color>          <!-- app background -->
+    <color name="win_cream_deep">#141416</color>     <!-- muted / surface-2 -->
+    <color name="win_white">#15151A</color>          <!-- cards, sheets -->
+    <color name="win_ink">#F6F2E7</color>            <!-- primary text -->
+    <color name="win_ink_muted">#9E9683</color>      <!-- secondary text -->
+    <color name="win_border">#2C2720</color>         <!-- hairline borders -->
+
+    <!-- Gold accents -->
+    <color name="win_green">#D4AF37</color>          <!-- primary action -->
+    <color name="win_green_dark">#B08F21</color>     <!-- pressed state -->
+    <color name="win_green_soft">#211C10</color>     <!-- tinted pill background -->
+    <color name="win_live">#4FC98A</color>           <!-- on-call pulse -->
+
+    <!-- Status -->
+    <color name="win_amber">#E2B94F</color>          <!-- pending / idle -->
+    <color name="win_red">#E0705B</color>            <!-- failed sync / critical -->
+    <color name="win_on_green">#17130A</color>
+</resources>
