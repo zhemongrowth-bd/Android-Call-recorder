@@ -1105,6 +1105,16 @@ private fun StatusCards(state: DeskUiState) {
                     else -> WinInkMuted
                 },
             )
+            if (recLabel == com.winstone.connect.data.sync.RecordingSyncLabel.FAILED) {
+                val ctx = androidx.compose.ui.platform.LocalContext.current
+                var retryNote by remember { mutableStateOf<String?>(null) }
+                androidx.compose.material3.OutlinedButton(onClick = {
+                    val n = com.winstone.connect.data.sync.CallSyncQueue.retryFailedRecordings(ctx)
+                    retryNote = if (n > 0) "Resending $n recording(s) · $n টি রেকর্ডিং আবার পাঠানো হচ্ছে"
+                    else "No recording can be resent — the audio file is no longer on this phone · ফোনে অডিও ফাইল নেই"
+                }) { Text("Retry failed uploads · আবার পাঠান") }
+                retryNote?.let { Text(it, fontSize = 11.sp, color = WinInkMuted) }
+            }
             Text(
                 "পাঠানোর অপেক্ষায়: ${state.sync.pending} · ব্যর্থ: ${state.sync.failed}",
                 fontSize = 12.sp,
