@@ -44,8 +44,13 @@ class PhoneRecordingPickupWorker(context: Context, params: WorkerParameters) :
 
         val match = PhoneRecordingMatcher.pick(query(ctx, start), start, end, phone)
         if (match == null) {
-            SyncStatus.retrying(ctx, "No matching phone recording found; call report sync is separate from audio")
-            return if (runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.success()
+            val message = "No matching phone recording found; call report sync is separate from audio"
+            if (runAttemptCount < MAX_ATTEMPTS) {
+                SyncStatus.retrying(ctx, message)
+                return Result.retry()
+            }
+            SyncStatus.retrying(ctx, "Recording pickup exhausted retries; audio remains unavailable and call report sync is separate")
+            return Result.failure()
         }
 
         val ext = match.displayName.substringAfterLast('.', "m4a").lowercase().take(5)
@@ -60,7 +65,12 @@ class PhoneRecordingPickupWorker(context: Context, params: WorkerParameters) :
         }.getOrDefault(false)
         if (!ok || copy.length() < 1_024) {
             copy.delete()
-            return if (runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.success()
+            if (runAttemptCount < MAX_ATTEMPTS) {
+                SyncStatus.retrying(ctx, "Phone recording copy failed; retrying pickup")
+                return Result.retry()
+            }
+            SyncStatus.retrying(ctx, "Recording pickup exhausted retries after copy failure; call report sync is separate")
+            return Result.failure()
         }
 
         val seconds = when {
@@ -68,19 +78,27 @@ class PhoneRecordingPickupWorker(context: Context, params: WorkerParameters) :
             else -> ((end - start) / 1000L).toInt()
         }.coerceAtLeast(1)
 
-        CallSyncQueue.queueRecording(
-            context = ctx,
-            leadId = inputData.getString(KEY_LEAD),
-            phoneNumber = phone,
-            file = copy,
-            durationSeconds = seconds,
-            // Phone dialer recorders capture the call line itself (both sides).
-            twoSided = true,
-            incoming = inputData.getBoolean(KEY_INCOMING, false),
-            recorderSource = SOURCE,
-            callUid = uid,
-            callStartedAt = java.time.Instant.ofEpochMilli(start).toString(),
-        )
+        try {
+            CallSyncQueue.queueRecording(
+                context = ctx,
+                leadId = inputData.getString(KEY_LEAD),
+                phoneNumber = phone,
+                file = copy,
+                durationSeconds = seconds,
+                // Phone dialer recorders capture the call line itself (both sides).
+                twoSided = true,
+                incoming = inputData.getBoolean(KEY_INCOMING, false),
+                recorderSource = SOURCE,
+                callUid = uid,
+                callStartedAt = java.time.Instant.ofEpochMilli(start).toString(),
+            )
+        } catch (e: Exception) {
+            SyncStatus.retrying(ctx, "Could not persist phone recording; retrying without deleting the pickup copy")
+            return if (runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.failure()
+        }
+        // queueRecording has committed a durable copy and enqueued its upload.
+        // Remove the intermediate pickup copy only after that succeeds.
+        copy.delete()
         return Result.success()
     }
 
