@@ -1,8 +1,8 @@
-name: Android debug APK
+name: Android APKs
 
 # Builds the Winstone Android companion (call-log tracing, recording pickup,
 # post-call reports) and attaches app-debug.apk to the workflow run.
-# Debug-signed only: no release keystore or secrets are used here.
+# Release is signed from encrypted repo secrets; the keystore is never committed.
 
 on:
   workflow_dispatch:
@@ -34,4 +34,20 @@ jobs:
         with:
           name: winstone-agent-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+      - name: Build signed release APK
+        env:
+          WINSTONE_KEYSTORE_B64: ${{ secrets.WINSTONE_KEYSTORE_B64 }}
+          WINSTONE_KEYSTORE_PASSWORD: ${{ secrets.WINSTONE_KEYSTORE_PASSWORD }}
+          WINSTONE_KEY_ALIAS: ${{ secrets.WINSTONE_KEY_ALIAS }}
+        run: |
+          test -n "$WINSTONE_KEYSTORE_B64" || { echo "Release signing secrets missing"; exit 1; }
+          echo "$WINSTONE_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          WINSTONE_KEYSTORE_PATH="$RUNNER_TEMP/release.jks" ./gradlew --no-daemon assembleRelease
+          rm -f "$RUNNER_TEMP/release.jks"
+          "$ANDROID_HOME"/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner verify --print-certs app/build/outputs/apk/release/*.apk | head -3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: winstone-agent-release-apk
+          path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
