@@ -31,6 +31,7 @@ object CallLogSweeper {
 
     private const val PREFS = "winstone_call_log"
     private const val KEY_CURSOR = "cursor_ms"
+    private const val KEY_CURSOR_ID = "cursor_id"
     private const val MAX_PER_SWEEP = 40
 
     /** Never look further back than this on a fresh install / first grant. */
@@ -44,7 +45,9 @@ object CallLogSweeper {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val cursor = prefs.getLong(KEY_CURSOR, now - FIRST_RUN_WINDOW_MS)
+        val cursorId = prefs.getLong(KEY_CURSOR_ID, 0L)
         var newest = cursor
+        var newestId = cursorId
         var queued = 0
 
         val rows = runCatching {
@@ -57,9 +60,9 @@ object CallLogSweeper {
                     CallLog.Calls.DATE,
                     CallLog.Calls.DURATION,
                 ),
-                "${CallLog.Calls.DATE} > ?",
-                arrayOf(cursor.toString()),
-                "${CallLog.Calls.DATE} ASC LIMIT $MAX_PER_SWEEP",
+                "${CallLog.Calls.DATE} > ? OR (${CallLog.Calls.DATE} = ? AND ${CallLog.Calls._ID} > ?)",
+                arrayOf(cursor.toString(), cursor.toString(), cursorId.toString()),
+                "${CallLog.Calls.DATE} ASC, ${CallLog.Calls._ID} ASC LIMIT $MAX_PER_SWEEP",
             )
         }.getOrNull() ?: return 0
 
@@ -71,11 +74,15 @@ object CallLogSweeper {
             val durCol = c.getColumnIndexOrThrow(CallLog.Calls.DURATION)
             while (c.moveToNext()) {
                 val at = c.getLong(dateCol)
+                val rowId = c.getLong(idCol)
                 // A call still in progress is left to the live receiver, and the
                 // cursor is NOT advanced past it: if the receiver misses it, the
                 // next sweep must still find the row.
                 if (at > now - 20_000) continue
-                if (at > newest) newest = at
+                if (CallLogCursor(at, rowId) > CallLogCursor(newest, newestId)) {
+                    newest = at
+                    newestId = rowId
+                }
                 val number = c.getString(numCol)?.trim().orEmpty()
                 if (number.length < 5 || number.any { !it.isDigit() && it != '+' }) continue
                 val duration = c.getInt(durCol).coerceAtLeast(0)
@@ -96,7 +103,9 @@ object CallLogSweeper {
             }
         }
 
-        if (newest > cursor) prefs.edit().putLong(KEY_CURSOR, newest).apply()
+        if (newest > cursor || (newest == cursor && newestId > cursorId)) {
+            prefs.edit().putLong(KEY_CURSOR, newest).putLong(KEY_CURSOR_ID, newestId).apply()
+        }
         // A call found afterwards (app was closed, call placed from WhatsApp or
         // the phone dialer) also owes a report: prompt for it on the phone.
         if (queued > 0) PendingReportWorker.prompt(context, delaySeconds = 10)
